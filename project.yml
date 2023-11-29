@@ -1,0 +1,300 @@
+title: "neuronlp pipeline creation"
+description: "All the steps required to train, package and evaluate the neuronlp pipeline"
+
+# Variables can be referenced across the project.yml using ${vars.var_name}
+vars:
+  ner_config: "ner_config"
+  full_model_config: "full_model_config"
+  senter_config: "senter_config"
+  classifier_config: "classifier" # "multilabel_classifier"
+  lang: "en"
+  vectors_name: "floret_custom_vectors"
+  max_vectors_texts: 200000
+  ner_name: "neuro_base"
+  classifier_name: "norm4age_cls"
+  full_model_name: "neuro_full_v1.8"
+  neg_name: "negation_detection"
+  rel_name: "relation_extraction"
+  senter_name: "tok2vec_segment"
+  source_model: "en_core_web_sm"#"en_core_sci_lg"
+  classifier_data_loc: "normality_data/age_normality" #"normality_data/binary_normality_v2" #"comparitive_data/comparative_data_v2"#"missing_data"
+  rel_test_name: "relation_data"
+  neg_test_name: "negation_test_data"
+  neg_pattern_name: "negation_patterns"
+  rel_pattern_name: "relation_patterns"
+  word_vectors: "training/floret_custom_vectors/floret_custom_vectors.floret_model"
+  local_data_repo: "~/Desktop/nlp-datasets"
+  neuronlp_repo: "~/Desktop/neuronlp"
+  model_to_evaluate: "neuro_base"
+  model_to_package: "neuro_base"
+  package_name: "neuro_base"
+  package_version: 1.0
+  neg_name_full: "negation_detection_broad_v1.8"
+  neg_pattern_name_full: "negation_patterns_broad_v1.8"
+  cls_processor: "preprocess_bin_cls"
+  gpu: 0
+
+# These are the directories that the project needs. The project CLI will make
+# sure that they always exist.
+directories: ["assets", "corpus", "training", "metrics", "configs", "packages","scripts"]
+
+assets:
+  - dest: "assets/${vars.ner_name}/train.jsonl"
+    url: "${vars.local_data_repo}/ner_data/train.jsonl"
+  - dest: "assets/${vars.ner_name}/dev.jsonl"
+    url: "${vars.local_data_repo}/ner_data/dev.jsonl"
+  - dest: "assets/${vars.ner_name}/test.jsonl"
+    url: "${vars.local_data_repo}/ner_data/test.jsonl"
+  - dest: "assets/${vars.neg_name}/test.jsonl"
+    url: "${vars.local_data_repo}/assertion_data/${vars.neg_test_name}.jsonl"
+  - dest: "assets/${vars.rel_name}/test.jsonl"
+    url: "${vars.local_data_repo}/relation_data/${vars.rel_test_name}.jsonl"
+  - dest: "assets/${vars.neg_name}/patterns.json"
+    url: "${vars.local_data_repo}/assertion_data/${vars.neg_pattern_name}/patterns.json"
+  - dest: "assets/${vars.neg_name_full}/patterns.json"
+    url: "${vars.local_data_repo}/assertion_data/${vars.neg_pattern_name_full}/patterns.json"
+  - dest: "assets/${vars.rel_name}/patterns.json"
+    url: "${vars.local_data_repo}/relation_data/${vars.rel_pattern_name}/patterns.json"
+  - dest: "assets/${vars.vectors_name}/raw_report_texts.jsonl"
+    url: "${vars.local_data_repo}/floret_vectors_data/raw_report_texts.jsonl"
+  - dest: "assets/${vars.full_model_name}/train.spacy"
+    url: "${vars.local_data_repo}/full_model_data/train.spacy"
+  - dest: "assets/${vars.full_model_name}/dev.spacy"
+    url: "${vars.local_data_repo}/full_model_data/dev.spacy"
+  - dest: "assets/${vars.full_model_name}/test.spacy"
+    url: "${vars.local_data_repo}/full_model_data/test.spacy"
+  - dest: "assets/${vars.classifier_name}/train.jsonl"
+    url: "${vars.local_data_repo}/${vars.classifier_data_loc}/train.jsonl"
+  - dest: "assets/${vars.classifier_name}/dev.jsonl"
+    url: "${vars.local_data_repo}/${vars.classifier_data_loc}/dev.jsonl"
+  - dest: "assets/${vars.classifier_name}/test.jsonl"
+    url: "${vars.local_data_repo}/${vars.classifier_data_loc}/test.jsonl"
+  - dest: "assets/${vars.senter_name}/train.spacy"
+    url: "${vars.local_data_repo}/sent_seg/train.spacy"
+  - dest: "assets/${vars.senter_name}/dev.spacy"
+    url: "${vars.local_data_repo}/sent_seg/dev.spacy"
+
+
+workflows:
+  classification:
+    - preprocess-classifier
+    - train-classifier
+    - evaluate-model
+    - package-model
+  segmenter:
+    - preprocess-segmenter
+    - train-segmenter
+    - evaluate-model
+    - package-model
+  full:
+    - preprocess-base
+    - train-ner
+    - evaluate-model
+    - evaluate-relex-negex
+    - package-model
+  floret-vectors:
+    - preprocess-floret
+    - train-floret
+    - init-floret-vectors
+  neuro-ner:
+    - preprocess-neuro-ner
+    - train-neuro-ner
+    - evaluate-model
+    - package-model
+
+commands:
+  - name: preprocess-base
+    help: "Convert the data to spaCy's format"
+    script:
+      - "mkdir -p corpus/${vars.ner_name}"
+      - "python scripts/preprocess_ner.py assets/${vars.ner_name}/train.jsonl corpus/${vars.ner_name}/train.spacy"
+      - "python scripts/preprocess_ner.py assets/${vars.ner_name}/dev.jsonl corpus/${vars.ner_name}/dev.spacy"
+      - "python scripts/preprocess_ner.py assets/${vars.ner_name}/test.jsonl corpus/${vars.ner_name}/test.spacy"
+      - "mkdir -p corpus/${vars.neg_name}"
+      - "python scripts/preprocess_negex.py assets/${vars.neg_name}/test.jsonl corpus/${vars.neg_name}/test.spacy"
+      - "mkdir -p corpus/${vars.rel_name}"
+      - "python scripts/preprocess_relex.py assets/${vars.rel_name}/test.jsonl corpus/${vars.rel_name}/test.spacy"
+    deps:
+      - "assets/${vars.ner_name}/train.jsonl"
+      - "assets/${vars.ner_name}/dev.jsonl"
+      - "assets/${vars.ner_name}/test.jsonl"
+      - "assets/${vars.rel_name}/test.jsonl"
+      - "assets/${vars.neg_name}/test.jsonl"
+      - "scripts/preprocess_ner.py"
+      - "scripts/preprocess_negex.py"
+      - "scripts/preprocess_relex.py"
+    outputs:
+      - "corpus/${vars.ner_name}/train.spacy"
+      - "corpus/${vars.ner_name}/dev.spacy"
+      - "corpus/${vars.ner_name}/test.spacy"
+      - "corpus/${vars.neg_name}/test.spacy"
+      - "corpus/${vars.rel_name}/test.spacy"
+
+  - name: preprocess-neuro-ner
+    help: "Preprocess the regex entity tagged data for neuro-ner pipeline"
+    script:
+      - "mkdir -p corpus/${vars.full_model_name}"
+      - "cp assets/${vars.full_model_name}/train.spacy corpus/${vars.full_model_name}/train.spacy"
+      - "cp assets/${vars.full_model_name}/dev.spacy corpus/${vars.full_model_name}/dev.spacy"
+      - "cp assets/${vars.full_model_name}/test.spacy corpus/${vars.full_model_name}/test.spacy"
+      - "mkdir -p corpus/${vars.neg_name}"
+      - "python scripts/preprocess_negex.py assets/${vars.neg_name}/test.jsonl corpus/${vars.neg_name}/test.spacy"
+    deps:
+      - "assets/${vars.full_model_name}/train.spacy"
+      - "assets/${vars.full_model_name}/dev.spacy"
+      - "assets/${vars.full_model_name}/test.spacy"
+      - "scripts/preprocess_negex.py"
+      - "assets/${vars.neg_name_full}/test.jsonl"
+    outputs:
+      - "corpus/${vars.full_model_name}/train.spacy"
+      - "corpus/${vars.full_model_name}/dev.spacy"
+      - "corpus/${vars.full_model_name}/test.spacy"
+      - "corpus/${vars.neg_name_full}/test.spacy"
+
+  - name: preprocess-segmenter
+    help: "Preprocess and copy over data for sentence classification pipe"
+    script:
+      - "mkdir -p corpus/${vars.senter_name}"
+      - "cp assets/${vars.senter_name}/train.spacy corpus/${vars.senter_name}/train.spacy"
+      - "cp assets/${vars.senter_name}/dev.spacy corpus/${vars.senter_name}/dev.spacy"
+    deps:
+      - "assets/${vars.senter_name}/train.spacy"
+      - "assets/${vars.senter_name}/dev.spacy"
+    outputs:
+      - "corpus/${vars.senter_name}/train.spacy"
+      - "corpus/${vars.senter_name}/dev.spacy"
+
+  - name: train-segmenter
+    help: "Train custom sentence recognition and segmentation pipe"
+    script:
+      - "python -m spacy train configs/${vars.senter_config}.cfg --output training/${vars.senter_name} --gpu-id ${vars.gpu} --paths.train corpus/${vars.senter_name}/train.spacy --paths.dev corpus/${vars.senter_name}/dev.spacy --paths.vectors ${vars.word_vectors}"
+    deps:
+      - "corpus/${vars.senter_name}/train.spacy"
+      - "corpus/${vars.senter_name}/dev.spacy"
+      - "configs/${vars.senter_config}.cfg"
+    outputs:
+      - "training/${vars.senter_name}/model-best"
+
+  - name: preprocess-floret
+    help: "Preprocess raw data for floret word vector training"
+    script:
+      - "mkdir -p corpus/${vars.vectors_name}"
+      - "python scripts/preprocess_floret.py assets/${vars.vectors_name}/raw_report_texts.jsonl corpus/${vars.vectors_name}/${vars.vectors_name}.tok.txt ${vars.max_vectors_texts}"
+    deps:
+      - "scripts/preprocess_floret.py"
+    outputs:
+      - "corpus/${vars.vectors_name}/${vars.vectors_name}.tok.txt"
+
+  - name: preprocess-classifier
+    help: "Preprocess classifier data"
+    script:
+      - "mkdir -p corpus/${vars.classifier_name}"
+      - "python scripts/${vars.cls_processor}.py assets/${vars.classifier_name}/train.jsonl corpus/${vars.classifier_name}/train.spacy"
+      - "python scripts/${vars.cls_processor}.py assets/${vars.classifier_name}/dev.jsonl corpus/${vars.classifier_name}/dev.spacy"
+      - "python scripts/${vars.cls_processor}.py assets/${vars.classifier_name}/test.jsonl corpus/${vars.classifier_name}/test.spacy"
+    deps:
+      - "assets/${vars.classifier_name}/train.jsonl"
+      - "assets/${vars.classifier_name}/dev.jsonl"
+      - "assets/${vars.classifier_name}/test.jsonl"
+      - "scripts/preprocess_cls.py"
+    outputs:
+      - "corpus/${vars.classifier_name}/train.spacy"
+      - "corpus/${vars.classifier_name}/dev.spacy"
+      - "corpus/${vars.classifier_name}/test.spacy"
+
+  - name: train-floret
+    help: "Train floret word vectors on custom dataset"
+    script:
+      - "mkdir -p training/${vars.vectors_name}"
+      - "python scripts/train_floret.py --model cbow --epoch 100 --dim 300 --mincount 10 --minn 4 --maxn 4 --neg 10 --mode floret --hashcount 2 --bucket 50000 --thread 20 corpus/${vars.vectors_name}/${vars.vectors_name}.tok.txt training/${vars.vectors_name}/${vars.vectors_name}"
+    deps:
+      - "scripts/train_floret.py"
+      - "corpus/${vars.vectors_name}/${vars.vectors_name}.tok.txt"
+    outputs:
+      - "training/${vars.vectors_name}/${vars.vectors_name}.floret"
+      - "training/${vars.vectors_name}/${vars.vectors_name}.vec"
+      - "training/${vars.vectors_name}/${vars.vectors_name}.bin"
+
+  - name: init-floret-vectors
+    help: "Create a floret vectors model"
+    script:
+      - "python -m spacy init vectors en training/${vars.vectors_name}/${vars.vectors_name}.floret training/${vars.vectors_name}/${vars.vectors_name}.floret_model --mode floret"
+    deps:
+      - "training/${vars.vectors_name}/${vars.vectors_name}.floret"
+    outputs:
+      - "training/${vars.vectors_name}/${vars.vectors_name}.floret_model"
+
+  - name: train-ner
+    help: "Train ner pipe with custom data"
+    script:
+      - "python -m spacy train configs/${vars.ner_config}.cfg --output training/${vars.ner_name} --gpu-id ${vars.gpu} --paths.train corpus/${vars.ner_name}/train.spacy --paths.dev corpus/${vars.ner_name}/dev.spacy  --paths.source_model ${vars.source_model} --paths.negex_patterns assets/${vars.neg_name}/patterns.json --paths.relex_patterns assets/${vars.rel_name}/patterns.json --paths.vectors ${vars.word_vectors} --code ${vars.neuronlp_repo}/src/neuronlp/custom_pipes.py"
+    deps:
+      - "corpus/${vars.ner_name}/train.spacy"
+      - "corpus/${vars.ner_name}/dev.spacy"
+      - "configs/${vars.ner_config}.cfg"
+      - "assets/${vars.neg_name}/patterns.json"
+      - "assets/${vars.rel_name}/patterns.json"
+    outputs:
+      - "training/${vars.ner_name}/model-best"
+
+  - name: train-classifier
+    help: "Train classifier"
+    script:
+      - "python -m spacy train configs/${vars.classifier_config}.cfg --output training/${vars.classifier_name} --paths.train corpus/${vars.classifier_name}/train.spacy --paths.dev corpus/${vars.classifier_name}/dev.spacy --gpu-id ${vars.gpu} --paths.vectors ${vars.word_vectors}"
+    deps:
+      - "configs/${vars.classifier_config}.cfg"
+      - "corpus/${vars.classifier_name}/train.spacy"
+      - "corpus/${vars.classifier_name}/dev.spacy"
+    outputs:
+      - "training/${vars.classifier_name}/model-best"
+
+  - name: evaluate-relex-negex
+    help: "Evaluate relation extraction and negation detection pipes and save metrics"
+    script:
+      - "python ./scripts/evaluate_rel.py ./training/${vars.ner_name}/model-best ./corpus/${vars.rel_name}/test.spacy ./metrics/${vars.rel_name}.json"
+      - "python ./scripts/evaluate_neg.py ./training/${vars.ner_name}/model-best ./corpus/${vars.neg_name}/test.spacy ./metrics/${vars.neg_name}.json"
+    deps:
+      - "training/${vars.ner_name}/model-best"
+      - "corpus/${vars.rel_name}/test.spacy"
+      - "corpus/${vars.neg_name}/test.spacy"
+    outputs:
+      - "metrics/${vars.rel_name}.json"
+      - "metrics/${vars.neg_name}.json"
+
+  - name: package-model
+    help: "Package the trained models for deployment and installation"
+    script:
+      - "python -m spacy package training/${vars.model_to_package}/model-best packages --name ${vars.package_name} --version ${vars.package_version} --force --code ${vars.neuronlp_repo}/src/neuronlp/custom_pipes.py --create-meta"
+    deps:
+      - "training/${vars.model_to_package}/model-best"
+      - "${vars.neuronlp_repo}/src/neuronlp/custom_pipes.py"
+    outputs_no_cache:
+      - "packages/${vars.lang}_${vars.package_name}-${vars.package_version}/dist/en_${vars.package_name}-${vars.package_version}.tar.gz"
+
+  - name: train-neuro-ner
+    help: train the tagger-parser-ner pipeline of the extended neuro model
+    script:
+      - "python -m spacy train configs/${vars.full_model_config}.cfg --output training/${vars.full_model_name} --gpu-id ${vars.gpu} --paths.train corpus/${vars.full_model_name}/train.spacy --paths.dev corpus/${vars.full_model_name}/dev.spacy --paths.vectors ${vars.word_vectors} --paths.negex_patterns assets/${vars.neg_name_full}/patterns.json --code ${vars.neuronlp_repo}/src/neuronlp/custom_pipes.py"
+    deps:
+      - "corpus/${vars.full_model_name}/train.spacy"
+      - "corpus/${vars.full_model_name}/dev.spacy"
+      - "configs/${vars.full_model_config}.cfg"
+      - "assets/${vars.neg_name_full}/patterns.json"
+    outputs:
+      - "training/${vars.full_model_name}/model-best"
+
+  - name: evaluate-model
+    help: "Evaluate model on data and save metrics"
+    script:
+      - "python -m spacy evaluate ./training/${vars.model_to_evaluate}/model-best ./corpus/${vars.model_to_evaluate}/test.spacy --output ./metrics/${vars.model_to_evaluate}.json --gpu-id ${vars.gpu} --code ${vars.neuronlp_repo}/src/neuronlp/custom_pipes.py"
+    deps:
+      - "training/${vars.model_to_evaluate}/model-best"
+      - "corpus/${vars.model_to_evaluate}/test.spacy"
+    outputs:
+      - "metrics/${vars.model_to_evaluate}.json"
+
+  - name: clean
+    help: "Remove intermediate files"
+    script:
+      - "rm -rf training"
+      - "rm -rf corpus"

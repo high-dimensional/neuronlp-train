@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neuronlp-train"
+dynamic = ["version"]
+description = 'Training spacy nlp models for neuroradiological text data'
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+keywords = []
+authors = [
+  { name = "Henry Watkins", email = "h.watkins@ucl.ac.uk" },
+]
+
+dependencies = [
+  "spacy",
+  "typer",
+  "tqdm",
+  "srsly",
+  "pandas",
+  "floret",
+  "negspacy",
+]
+
+[project.urls]
+Documentation = "https://github.com/high-dimensional/neuronlp-train#readme"
+Issues = "https://github.com/high-dimensional/neuronlp-train/issues"
+Source = "https://github.com/high-dimensional/neuronlp-train"
+
+[tool.hatch.envs.default]
+dependencies = [
+  "black",
+  "pytest",
+  "isort",
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+fmt = "black . ; isort . "

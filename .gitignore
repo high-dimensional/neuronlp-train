@@ -1,0 +1,26 @@
+# Byte-compiled
+__pycache__/
+
+# Distribution
+*.egg-info/
+*.png
+*.csv
+# Unit test
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+#profiling/debugging
+*.profile
+.hypothesis
+.idea
+#spacy 3 projects data
+corpus
+assets
+training
+test_data
+packages
+.pytest_cache
+
+metrics
